@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>סוכן בדיקת נגישות | Accessibility Audit Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                        d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                        fill="currentColor" />
+                </svg>
+                <h1>סוכן בדיקת נגישות</h1>
+            </div>
+            <p class="subtitle">בדקו את נגישות האתר שלכם בקלות ומהירות</p>
+        </header>
+
+        <div class="card input-card">
+            <form id="auditForm">
+                <div class="input-group">
+                    <label for="urlInput">כתובת האתר לבדיקה</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="urlInput" placeholder="לדוגמה: google.com או https://example.com"
+                            required>
+                        <button type="submit" id="auditBtn" class="btn-primary">
+                            <span class="btn-text">בדוק נגישות</span>
+                            <div class="spinner hidden"></div>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+
+        <div id="results" class="results hidden">
+            <div class="results-header">
+                <h2>תוצאות הביקורת</h2>
+                <div class="tested-url">
+                    <span>אתר שנבדק:</span>
+                    <a id="testedUrl" href="#" target="_blank"></a>
+                </div>
+
+                <!-- Compact WCAG Info in Header -->
+                <div class="wcag-summary-compact">
+                    <div class="wcag-summary-left">
+                        <div class="wcag-mini-info">
+                            <span class="wcag-mini-label">סוג:</span>
+                            <span id="siteTypeCompact" class="wcag-mini-value"></span>
+                        </div>
+                        <div class="wcag-mini-info">
+                            <span class="wcag-mini-label">נדרש:</span>
+                            <span id="requiredLevelCompact" class="wcag-mini-value"></span>
+                        </div>
+                        <div class="wcag-mini-info">
+                            <span class="wcag-mini-label">הושג:</span>
+                            <span id="achievedLevelCompact" class="wcag-mini-value wcag-level-indicator"></span>
+                        </div>
+                    </div>
+                    <div class="download-buttons">
+                        <button onclick="downloadReport()" class="btn-download">
+                            <span>📄</span> הורד דוח מפורט
+                        </button>
+                        <button onclick="downloadJSON()" class="btn-download btn-download-json">
+                            <span>📊</span> הורד JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Status Grid -->
+            <div class="quick-status-grid">
+                <div id="quickStatusA" class="quick-status-item">
+                    <div class="quick-status-icon"></div>
+                    <span>Level A</span>
+                </div>
+                <div id="quickStatusAA" class="quick-status-item">
+                    <div class="quick-status-icon"></div>
+                    <span>Level AA</span>
+                </div>
+                <div id="quickStatusAAA" class="quick-status-item">
+                    <div class="quick-status-icon"></div>
+                    <span>Level AAA</span>
+                </div>
+            </div>
+
+            <div class="summary-cards">
+                <div class="summary-card total">
+                    <div class="summary-icon">📊</div>
+                    <div class="summary-content">
+                        <div class="summary-number" id="totalIssues">0</div>
+                        <div class="summary-label">סה"כ בעיות</div>
+                    </div>
+                </div>
+                <div class="summary-card critical">
+                    <div class="summary-icon">🔴</div>
+                    <div class="summary-content">
+                        <div class="summary-number" id="criticalCount">0</div>
+                        <div class="summary-label">קריטי</div>
+                    </div>
+                </div>
+                <div class="summary-card high">
+                    <div class="summary-icon">🟠</div>
+                    <div class="summary-content">
+                        <div class="summary-number" id="highCount">0</div>
+                        <div class="summary-label">גבוה</div>
+                    </div>
+                </div>
+                <div class="summary-card medium">
+                    <div class="summary-icon">🟡</div>
+                    <div class="summary-content">
+                        <div class="summary-number" id="mediumCount">0</div>
+                        <div class="summary-label">בינוני</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="issuesList" class="issues-list"></div>
+
+            <div id="successMessage" class="success-message hidden">
+                <div class="success-icon">✅</div>
+                <h3>מצוין!</h3>
+                <p>לא נמצאו בעיות נגישות בבדיקות הבסיסיות</p>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="error-message hidden">
+            <div class="error-icon">❌</div>
+            <p id="errorText"></p>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>
