@@ -150,13 +150,9 @@ function updateQuickStatus(elementId, passes) {
     element.classList.add(passes ? 'passed' : 'failed');
 }
 
-// Download functions
-function downloadReport() {
+// Download function
+function downloadPDF() {
     window.location.href = '/download-report';
-}
-
-function downloadJSON() {
-    window.location.href = '/download-json';
 }
 
 
