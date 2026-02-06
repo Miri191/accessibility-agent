@@ -12,6 +12,7 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import inch
+import html
 
 app = Flask(__name__)
 
@@ -134,16 +135,16 @@ def download_report():
     elements.append(Spacer(1, 0.3*inch))
     
     # Site info
-    elements.append(Paragraph(f'אתר נבדק: {last_audit_result["url"]}', normal_style))
-    elements.append(Paragraph(f'תאריך: {last_audit_result["timestamp"]}', normal_style))
+    elements.append(Paragraph(f'אתר נבדק: {html.escape(last_audit_result["url"])}', normal_style))
+    elements.append(Paragraph(f'תאריך: {html.escape(last_audit_result["timestamp"])}', normal_style))
     elements.append(Spacer(1, 0.2*inch))
     
     # WCAG Level summary
     elements.append(Paragraph('מידע על רמת WCAG', heading_style))
-    elements.append(Paragraph(f'סוג האתר: {last_audit_result["wcag_level"]["site_type"]}', normal_style))
-    elements.append(Paragraph(f'רמה נדרשת: {last_audit_result["wcag_level"]["required_level"]}', normal_style))
-    elements.append(Paragraph(f'רמה שהושגה: {last_audit_result["wcag_level"]["achieved_label"]}', normal_style))
-    elements.append(Paragraph(last_audit_result["wcag_level"]["achieved_description"], normal_style))
+    elements.append(Paragraph(f'סוג האתר: {html.escape(last_audit_result["wcag_level"]["site_type"])}', normal_style))
+    elements.append(Paragraph(f'רמה נדרשת: {html.escape(last_audit_result["wcag_level"]["required_level"])}', normal_style))
+    elements.append(Paragraph(f'רמה שהושגה: {html.escape(last_audit_result["wcag_level"]["achieved_label"])}', normal_style))
+    elements.append(Paragraph(html.escape(last_audit_result["wcag_level"]["achieved_description"]), normal_style))
     elements.append(Spacer(1, 0.2*inch))
     
     # WCAG Levels table
@@ -151,7 +152,7 @@ def download_report():
     wcag_data = [['Level', 'Status', 'Description']]
     for level, info in last_audit_result['wcag_level']['all_levels'].items():
         status = 'Pass' if info['passes'] else 'Fail'
-        wcag_data.append([info['label'], status, info['description']])
+        wcag_data.append([html.escape(info['label']), status, html.escape(info['description'])])
     
     wcag_table = Table(wcag_data, colWidths=[1.5*inch, 1*inch, 3.5*inch])
     wcag_table.setStyle(TableStyle([
@@ -192,8 +193,8 @@ def download_report():
             elements.append(Spacer(1, 0.2*inch))
             
             for i, issue in enumerate(issues, 1):
-                elements.append(Paragraph(f'{i}. {issue["type"]}', normal_style))
-                elements.append(Paragraph(f'   {issue["details"]}', normal_style))
+                elements.append(Paragraph(f'{i}. {html.escape(issue["type"])}', normal_style))
+                elements.append(Paragraph(f'   {html.escape(issue["details"])}', normal_style))
                 
                 if 'count' in issue:
                     elements.append(Paragraph(f'   מספר מופעים: {issue["count"]}', normal_style))
@@ -201,7 +202,8 @@ def download_report():
                 if 'examples' in issue and issue['examples']:
                     elements.append(Paragraph('   דוגמאות:', normal_style))
                     for example in issue['examples'][:5]:
-                        elements.append(Paragraph(f'      - {example[:100]}...', normal_style))
+                        escaped_example = html.escape(example[:100])
+                        elements.append(Paragraph(f'      - {escaped_example}...', normal_style))
                 
                 elements.append(Spacer(1, 0.1*inch))
     
