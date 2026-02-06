@@ -3,6 +3,15 @@ from accessibility_agent import AccessibilityAgent
 import traceback
 import json
 from datetime import datetime
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import inch
 
 app = Flask(__name__)
 
@@ -74,89 +83,155 @@ def audit():
 
 @app.route('/download-report')
 def download_report():
-    """Download detailed accessibility report"""
+    """Download detailed accessibility report as PDF"""
     global last_audit_result
     
     if not last_audit_result:
         return jsonify({'error': 'No audit data available. Please run an audit first.'}), 400
     
-    # Create detailed report
-    report_lines = []
-    report_lines.append("=" * 80)
-    report_lines.append("דוח נגישות מפורט | Detailed Accessibility Report")
-    report_lines.append("=" * 80)
-    report_lines.append(f"\nאתר נבדק: {last_audit_result['url']}")
-    report_lines.append(f"תאריך: {last_audit_result['timestamp']}")
-    report_lines.append(f"\nסוג האתר: {last_audit_result['wcag_level']['site_type']}")
-    report_lines.append(f"רמה נדרשת: {last_audit_result['wcag_level']['required_level']}")
-    report_lines.append(f"רמה שהושגה: {last_audit_result['wcag_level']['achieved_label']}")
-    report_lines.append(f"\n{last_audit_result['wcag_level']['achieved_description']}")
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18)
     
-    report_lines.append("\n" + "=" * 80)
-    report_lines.append("סטטוס עמידה ברמות WCAG")
-    report_lines.append("=" * 80)
+    # Container for PDF elements
+    elements = []
+    
+    # Create custom styles for Hebrew text (right-to-left)
+    styles = getSampleStyleSheet()
+    
+    # Title style
+    title_style = ParagraphStyle(
+        'HebrewTitle',
+        parent=styles['Heading1'],
+        alignment=TA_CENTER,
+        fontSize=24,
+        spaceAfter=30,
+        textColor=colors.HexColor('#2563eb')
+    )
+    
+    # Heading style (RTL)
+    heading_style = ParagraphStyle(
+        'HebrewHeading',
+        parent=styles['Heading2'],
+        alignment=TA_RIGHT,
+        fontSize=16,
+        spaceAfter=12,
+        textColor=colors.HexColor('#1e40af')
+    )
+    
+    # Normal text style (RTL)
+    normal_style = ParagraphStyle(
+        'HebrewNormal',
+        parent=styles['Normal'],
+        alignment=TA_RIGHT,
+        fontSize=11,
+        spaceAfter=8
+    )
+    
+    # Build PDF content
+    # Title
+    elements.append(Paragraph('Detailed Accessibility Report | דוח נגישות מפורט', title_style))
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Site info
+    elements.append(Paragraph(f'אתר נבדק: {last_audit_result["url"]}', normal_style))
+    elements.append(Paragraph(f'תאריך: {last_audit_result["timestamp"]}', normal_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # WCAG Level summary
+    elements.append(Paragraph('מידע על רמת WCAG', heading_style))
+    elements.append(Paragraph(f'סוג האתר: {last_audit_result["wcag_level"]["site_type"]}', normal_style))
+    elements.append(Paragraph(f'רמה נדרשת: {last_audit_result["wcag_level"]["required_level"]}', normal_style))
+    elements.append(Paragraph(f'רמה שהושגה: {last_audit_result["wcag_level"]["achieved_label"]}', normal_style))
+    elements.append(Paragraph(last_audit_result["wcag_level"]["achieved_description"], normal_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # WCAG Levels table
+    elements.append(Paragraph('סטטוס עמידה ברמות WCAG', heading_style))
+    wcag_data = [['Level', 'Status', 'Description']]
     for level, info in last_audit_result['wcag_level']['all_levels'].items():
-        status = "✅ עומד" if info['passes'] else "❌ לא עומד"
-        report_lines.append(f"\n{info['label']}: {status}")
-        report_lines.append(f"   {info['description']}")
+        status = 'Pass' if info['passes'] else 'Fail'
+        wcag_data.append([info['label'], status, info['description']])
     
-    report_lines.append("\n" + "=" * 80)
-    report_lines.append("סיכום בעיות")
-    report_lines.append("=" * 80)
-    report_lines.append(f"\nסה\"כ בעיות: {last_audit_result['total_issues']}")
-    report_lines.append(f"קריטיות: {len(last_audit_result['issues']['critical'])}")
-    report_lines.append(f"גבוהות: {len(last_audit_result['issues']['high'])}")
-    report_lines.append(f"בינוניות: {len(last_audit_result['issues']['medium'])}")
-    report_lines.append(f"נמוכות: {len(last_audit_result['issues']['low'])}")
+    wcag_table = Table(wcag_data, colWidths=[1.5*inch, 1*inch, 3.5*inch])
+    wcag_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    elements.append(wcag_table)
+    elements.append(Spacer(1, 0.3*inch))
     
-    # Priority order and Hebrew names
+    # Issues summary
+    elements.append(Paragraph('סיכום בעיות', heading_style))
+    elements.append(Paragraph(f'סה"כ בעיות: {last_audit_result["total_issues"]}', normal_style))
+    elements.append(Paragraph(f'קריטיות: {len(last_audit_result["issues"]["critical"])}', normal_style))
+    elements.append(Paragraph(f'גבוהות: {len(last_audit_result["issues"]["high"])}', normal_style))
+    elements.append(Paragraph(f'בינוניות: {len(last_audit_result["issues"]["medium"])}', normal_style))
+    elements.append(Paragraph(f'נמוכות: {len(last_audit_result["issues"]["low"])}', normal_style))
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Detailed issues
     priorities = [
-        ('critical', 'קריטיות'),
-        ('high', 'גבוהות'),
-        ('medium', 'בינוניות'),
-        ('low', 'נמוכות')
+        ('critical', 'בעיות קריטיות'),
+        ('high', 'בעיות בעדיפות גבוהה'),
+        ('medium', 'בעיות בעדיפות בינונית'),
+        ('low', 'בעיות בעדיפות נמוכה')
     ]
     
     for priority_key, priority_name in priorities:
         issues = last_audit_result['issues'][priority_key]
         if issues:
-            report_lines.append(f"\n{'=' * 80}")
-            report_lines.append(f"בעיות {priority_name} ({len(issues)})")
-            report_lines.append("=" * 80)
+            elements.append(PageBreak())
+            elements.append(Paragraph(f'{priority_name} ({len(issues)})', heading_style))
+            elements.append(Spacer(1, 0.2*inch))
             
             for i, issue in enumerate(issues, 1):
-                report_lines.append(f"\n{i}. {issue['type']}")
-                report_lines.append(f"   {issue['details']}")
+                elements.append(Paragraph(f'{i}. {issue["type"]}', normal_style))
+                elements.append(Paragraph(f'   {issue["details"]}', normal_style))
                 
                 if 'count' in issue:
-                    report_lines.append(f"   מספר מופעים: {issue['count']}")
+                    elements.append(Paragraph(f'   מספר מופעים: {issue["count"]}', normal_style))
                 
                 if 'examples' in issue and issue['examples']:
-                    report_lines.append(f"   דוגמאות:")
+                    elements.append(Paragraph('   דוגמאות:', normal_style))
                     for example in issue['examples'][:5]:
-                        report_lines.append(f"      - {example}")
+                        elements.append(Paragraph(f'      - {example[:100]}...', normal_style))
+                
+                elements.append(Spacer(1, 0.1*inch))
     
-    report_lines.append("\n" + "=" * 80)
-    report_lines.append("סטטיסטיקות מפורטות")
-    report_lines.append("=" * 80)
-    report_lines.append(f"\nתמונות: {last_audit_result['stats']['total_images']} סה\"כ, {last_audit_result['stats']['images_without_alt']} ללא alt")
-    report_lines.append(f"קישורים: {last_audit_result['stats']['total_links']} סה\"כ, {last_audit_result['stats']['unclear_links']} לא ברורים")
-    report_lines.append(f"שדות טופס: {last_audit_result['stats']['total_forms']} סה\"כ, {last_audit_result['stats']['forms_without_labels']} ללא labels")
-    report_lines.append(f"כפתורים: {last_audit_result['stats']['total_buttons']} סה\"כ, {last_audit_result['stats']['buttons_without_text']} ללא טקסט")
-    report_lines.append(f"טבלאות: {last_audit_result['stats']['total_tables']} סה\"כ, {last_audit_result['stats']['tables_without_headers']} ללא headers")
-    report_lines.append(f"כותרות H1: {last_audit_result['stats']['h1_count']}")
-    report_lines.append(f"שפת הדף: {'כן' if last_audit_result['stats']['has_lang'] else 'לא'}")
+    # Statistics
+    elements.append(PageBreak())
+    elements.append(Paragraph('סטטיסטיקות מפורטות', heading_style))
+    elements.append(Paragraph(f'תמונות: {last_audit_result["stats"]["total_images"]} סה"כ, '
+                             f'{last_audit_result["stats"]["images_without_alt"]} ללא alt', normal_style))
+    elements.append(Paragraph(f'קישורים: {last_audit_result["stats"]["total_links"]} סה"כ, '
+                             f'{last_audit_result["stats"]["unclear_links"]} לא ברורים', normal_style))
+    elements.append(Paragraph(f'שדות טופס: {last_audit_result["stats"]["total_forms"]} סה"כ, '
+                             f'{last_audit_result["stats"]["forms_without_labels"]} ללא labels', normal_style))
+    elements.append(Paragraph(f'כפתורים: {last_audit_result["stats"]["total_buttons"]} סה"כ, '
+                             f'{last_audit_result["stats"]["buttons_without_text"]} ללא טקסט', normal_style))
+    elements.append(Paragraph(f'טבלאות: {last_audit_result["stats"]["total_tables"]} סה"כ, '
+                             f'{last_audit_result["stats"]["tables_without_headers"]} ללא headers', normal_style))
+    elements.append(Paragraph(f'כותרות H1: {last_audit_result["stats"]["h1_count"]}', normal_style))
+    elements.append(Paragraph(f'שפת הדף: {"כן" if last_audit_result["stats"]["has_lang"] else "לא"}', normal_style))
     
-    report_lines.append("\n" + "=" * 80)
-    report_lines.append("סוף הדוח")
-    report_lines.append("=" * 80)
+    # Build PDF
+    doc.build(elements)
     
-    report_text = "\n".join(report_lines)
+    # Get PDF from buffer
+    pdf_data = buffer.getvalue()
+    buffer.close()
     
-    # Create response with UTF-8 encoding
-    response = make_response(report_text)
-    response.headers['Content-Type'] = 'text/plain; charset=utf-8'
-    response.headers['Content-Disposition'] = f'attachment; filename=accessibility-report-{datetime.now().strftime("%Y%m%d-%H%M%S")}.txt'
+    # Create response
+    response = make_response(pdf_data)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=accessibility-report-{datetime.now().strftime("%Y%m%d-%H%M%S")}.pdf'
     
     return response
 
