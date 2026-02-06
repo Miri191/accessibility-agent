@@ -107,6 +107,8 @@ body {
 .input-wrapper {
     display: flex;
     gap: 1rem;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 input[type="text"] {
